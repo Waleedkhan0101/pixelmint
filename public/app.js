@@ -853,4 +853,44 @@ renderQueue();
 
     });
 
+})();/* ==========================
+   EBAY ICON FIX
+========================== */
+
+(function () {
+    const ebayButton = document.querySelector(
+        '.platform[data-platform="ebay"]'
+    );
+
+    if (!ebayButton) return;
+
+    const icon = ebayButton.querySelector('span');
+
+    if (!icon) return;
+
+    icon.style.cssText = `
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 44px !important;
+        height: 36px !important;
+        min-width: 44px !important;
+        background: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        font-family: Arial, sans-serif !important;
+        font-size: 18px !important;
+        font-weight: 500 !important;
+        letter-spacing: -1.5px !important;
+        overflow: visible !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+    `;
+
+    icon.innerHTML = `
+        <b style="color:#E53238 !important;">e</b>
+        <b style="color:#0064D2 !important;">b</b>
+        <b style="color:#F5AF02 !important;">a</b>
+        <b style="color:#86B817 !important;">y</b>
+    `;
 })();
