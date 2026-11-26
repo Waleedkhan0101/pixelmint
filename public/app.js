@@ -604,3 +604,253 @@ $('process').onclick = async () => {
 $('year').textContent = new Date().getFullYear();
 
 renderQueue();
+
+
+/* =========================================
+   ADDITIONAL MARKETPLACE & SOCIAL PRESETS
+========================================= */
+
+(function () {
+
+    const marketplacePresets = {
+
+        pinterest: [
+            ['Standard Pin (Recommended)', 1000, 1500],
+            ['Square Pin', 1000, 1000],
+            ['Full Screen Vertical', 1080, 1920]
+        ],
+
+        etsy: [
+            ['Listing Photo - Square', 2000, 2000],
+            ['Listing Photo - Landscape', 2800, 2100],
+            ['Shop Icon', 500, 500],
+            ['Profile Photo', 400, 400],
+            ['Mini Shop Banner', 1600, 213],
+            ['Mini Shop Banner - Minimum', 1200, 160],
+            ['Order Receipt Banner', 760, 100],
+            ['Team Logo', 170, 100]
+        ],
+
+        amazon: [
+            ['Product Image (Recommended)', 2000, 2000],
+            ['Product Image - Standard', 1600, 1600],
+            ['Zoom Enabled - Square', 1000, 1000],
+            ['Minimum Size - Square', 500, 500]
+        ],
+
+        ebay: [
+            ['Listing Photo (Recommended)', 1600, 1600],
+            ['Landscape Photo - 16:9', 1600, 900],
+            ['High Resolution Square', 2000, 2000],
+            ['Minimum Size - Square', 500, 500]
+        ]
+
+    };
+
+    const newPlatforms = [
+
+        {
+            id: 'pinterest',
+            name: 'Pinterest',
+            color: '#E60023',
+            icon: `
+                <svg viewBox="0 0 24 24"
+                     width="20" height="20">
+                    <text x="12" y="19"
+                          text-anchor="middle"
+                          font-family="Georgia, serif"
+                          font-size="24"
+                          font-weight="bold"
+                          font-style="italic"
+                          fill="white">P</text>
+                </svg>
+            `
+        },
+
+        {
+            id: 'etsy',
+            name: 'Etsy',
+            color: '#F1641E',
+            icon: `
+                <svg viewBox="0 0 24 24"
+                     width="20" height="20">
+                    <text x="12" y="19"
+                          text-anchor="middle"
+                          font-family="Georgia, serif"
+                          font-size="23"
+                          fill="white">E</text>
+                </svg>
+            `
+        },
+
+        {
+            id: 'amazon',
+            name: 'Amazon',
+            color: '#232F3E',
+            icon: `
+                <svg viewBox="0 0 24 24"
+                     width="20" height="20">
+                    <text x="12" y="16"
+                          text-anchor="middle"
+                          font-family="Arial, sans-serif"
+                          font-size="23"
+                          font-weight="bold"
+                          fill="white">a</text>
+                    <path d="M4 18 Q12 24 20 18"
+                          fill="none"
+                          stroke="#FF9900"
+                          stroke-width="2"
+                          stroke-linecap="round"/>
+                </svg>
+            `
+        },
+
+        {
+            id: 'ebay',
+            name: 'eBay',
+            color: '#FFFFFF',
+            icon: `
+                <svg viewBox="0 0 36 24"
+                     width="25" height="20">
+                    <text x="1" y="17"
+                          font-size="14"
+                          font-family="Arial, sans-serif"
+                          font-weight="bold">
+                        <tspan fill="#E53238">e</tspan>
+                        <tspan fill="#0064D2">b</tspan>
+                        <tspan fill="#F5AF02">a</tspan>
+                        <tspan fill="#86B817">y</tspan>
+                    </text>
+                </svg>
+            `
+        }
+
+    ];
+
+    const platformContainer =
+        document.querySelector('.platforms');
+
+    if (!platformContainer) {
+        console.warn('Platform container not found.');
+        return;
+    }
+
+    /* Responsive 4-column layout */
+
+    platformContainer.style.display = 'grid';
+
+    platformContainer.style.gridTemplateColumns =
+        'repeat(4, minmax(0, 1fr))';
+
+    /* Register additional presets */
+
+    Object.assign(presets, marketplacePresets);
+
+    /* Create platform buttons */
+
+    newPlatforms.forEach(platform => {
+
+        if (
+            platformContainer.querySelector(
+                `[data-platform="${platform.id}"]`
+            )
+        ) {
+            return;
+        }
+
+        const button = document.createElement('button');
+
+        button.type = 'button';
+        button.className = 'platform';
+
+        button.dataset.platform = platform.id;
+
+        button.setAttribute('aria-pressed', 'false');
+
+        const iconWrapper =
+            document.createElement('span');
+
+        iconWrapper.style.background =
+            platform.color;
+
+        iconWrapper.innerHTML = platform.icon;
+
+        if (platform.id === 'ebay') {
+            iconWrapper.style.border =
+                '1px solid #E2E8F0';
+
+            const svg = iconWrapper.querySelector('svg');
+
+            if (svg) {
+                svg.style.width = '27px';
+            }
+        }
+
+        button.append(
+            iconWrapper,
+            document.createTextNode(platform.name)
+        );
+
+        /* Handle platform selection */
+
+        button.addEventListener('click', () => {
+
+            document
+                .querySelectorAll('.platform')
+                .forEach(item => {
+
+                    item.setAttribute(
+                        'aria-pressed',
+                        String(item === button)
+                    );
+
+                });
+
+            const presetSelect =
+                document.getElementById('preset');
+
+            presetSelect.replaceChildren(
+                new Option(
+                    'Custom size / original dimensions',
+                    'custom'
+                )
+            );
+
+            marketplacePresets[platform.id]
+                .forEach(([label, width, height]) => {
+
+                    presetSelect.add(
+                        new Option(
+                            `${label} - ${width} × ${height}`,
+                            `${width},${height}`
+                        )
+                    );
+
+                });
+
+            presetSelect.selectedIndex = 1;
+
+            /* Disable upscale for fixed dimensions */
+
+            const upscale =
+                document.getElementById('upscale');
+
+            if (upscale) {
+                upscale.value = '1';
+            }
+
+            /* Apply selected dimensions */
+
+            presetSelect.dispatchEvent(
+                new Event('change', {
+                    bubbles: true
+                })
+            );
+
+        });
+
+        platformContainer.appendChild(button);
+
+    });
+
+})();
