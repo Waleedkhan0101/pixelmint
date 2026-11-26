@@ -13,14 +13,19 @@ def settings(raw):
     fit = raw.get('fit', 'contain')
     w, h = int(raw.get('width') or 0), int(raw.get('height') or 0)
     q = int(raw.get('quality', 95))
+    upscale = int(raw.get('upscale') or 1)
+    if upscale not in (1, 2, 3, 4):
+        raise ValueError('Upscale must be 1x, 2x, 3x or 4x.')
+    if upscale != 1 and (w or h):
+        raise ValueError('Choose either upscale or custom dimensions, not both.')
     if fmt not in ('original', *FORMATS) or fit not in ('contain','cover','stretch') or not 10 <= q <= 100:
         raise ValueError('Invalid export settings.')
     if not (0 <= w <= 8192 and 0 <= h <= 8192):
         raise ValueError('Dimensions must be between 1 and 8192, or blank.')
-    return fmt, fit, w, h, q
+    return fmt, fit, w, h, q, upscale
 
 def export_image(data, opts):
-    fmt, fit, w, h, q = opts
+    fmt, fit, w, h, q, upscale = opts
     if not data or len(data) > MAX_FILE:
         raise ValueError('File exceeds 30 MB or is empty.')
     with Image.open(io.BytesIO(data)) as src:
@@ -36,7 +41,12 @@ def export_image(data, opts):
         alpha = 'A' in src.getbands() or 'transparency' in src.info
         src = src.convert('RGBA' if alpha else 'RGB')
         sw, sh = src.size
-        if w or h:
+        if upscale != 1:
+            w, h = sw * upscale, sh * upscale
+            if max(w, h) > 8192 or w * h > MAX_PIXELS:
+                raise ValueError('Upscaled image exceeds 32 megapixels or 8192 pixels per side. Choose a smaller multiplier.')
+            src = src.resize((w, h), Image.Resampling.LANCZOS)
+        elif w or h:
             w = w or max(1, round(sw * h / sh))
             h = h or max(1, round(sh * w / sw))
             if max(w,h) > 8192 or w*h > MAX_PIXELS:
