@@ -603,246 +603,232 @@
     }
 
     /* =========================================
-       AI MODEL LOADING
-    ========================================= */
+   AI MODEL LOADING - FIXED
+========================================= */
 
-    async function loadAIModel() {
+async function loadAIModel() {
 
-        if (!modelPromise) {
+    if (!modelPromise) {
 
-            modelPromise = (async () => {
+        modelPromise = (async () => {
 
-                const {
+            const { pipeline, env } = await import(
+                'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2'
+            );
 
-                    AutoModel,
+            env.allowLocalModels = false;
+            env.useBrowserCache = true;
 
-                    AutoProcessor,
+            const segmenter = await pipeline(
 
-                    RawImage,
+                'background-removal',
 
-                    env
+                'onnx-community/ormbg-ONNX',
 
-                } = await import(
+                {
+                    device: 'wasm',
 
-                    'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2'
-                );
+                    dtype: 'q8',
 
-                env.allowLocalModels = false;
+                    progress_callback: event => {
 
-                const modelID = 'BritishWerewolf/U-2-Netp';
+                        if (
+                            event.status === 'progress' &&
+                            Number.isFinite(event.progress)
+                        ) {
 
-                const processor = await AutoProcessor.from_pretrained(
+                            note(
+                                'bg-status',
+                                `Downloading AI model… ${Math.round(event.progress)}%`
+                            );
 
-                    modelID
-                );
+                        } else if (
+                            event.status === 'ready'
+                        ) {
 
-                const model = await AutoModel.from_pretrained(
-
-                    modelID,
-
-                    {
-                        dtype: 'fp32',
-
-                        device: 'wasm',
-
-                        progress_callback: event => {
-
-                            if (
-
-                                event.status === 'progress' &&
-
-                                Number.isFinite(event.progress)
-
-                            ) {
-
-                                note(
-
-                                    'bg-status',
-
-                                    `Downloading model… ${Math.round(event.progress)}%`
-                                );
-                            }
+                            note(
+                                'bg-status',
+                                'AI model ready.'
+                            );
                         }
                     }
-                );
-
-                return {
-
-                    processor,
-
-                    model,
-
-                    RawImage
-                };
-
-            })();
-        }
-
-        try {
-
-            return await modelPromise;
-
-        } catch (error) {
-
-            modelPromise = null;
-
-            throw Error(
-
-                'Could not load the AI model. Check internet or try Solid background mode. ' +
-
-                error.message
+                }
             );
-        }
+
+            return segmenter;
+
+        })();
     }
 
-    /* =========================================
-       PROCESS BACKGROUND REMOVAL
-    ========================================= */
+    try {
 
-    async function cutout(file, mode, tolerance) {
+        return await modelPromise;
 
-        const bitmap = await createImageBitmap(file);
+    } catch (error) {
 
-        let canvas;
+        modelPromise = null;
 
-        try {
+        console.error(
+            'Background removal model error:',
+            error
+        );
 
-            const width = bitmap.width;
+        throw new Error(
+            'Could not initialize AI model. ' +
+            error.message
+        );
+    }
+}
 
-            const height = bitmap.height;
 
-            if (
+/* =========================================
+   PROCESS BACKGROUND REMOVAL - FIXED
+========================================= */
 
-                width > 8192 ||
+async function cutout(file, mode, tolerance) {
 
-                height > 8192 ||
+    const bitmap = await createImageBitmap(file);
 
-                width * height > 16000000
+    let canvas;
+    let resultCanvas;
 
-            ) {
+    try {
 
-                throw Error(
+        const width = bitmap.width;
+        const height = bitmap.height;
 
-                    'Background remover supports up to 16 megapixels and 8192 pixels per side. Resize the image first.'
-                );
-            }
+        if (
+            width > 8192 ||
+            height > 8192 ||
+            width * height > 16000000
+        ) {
 
-            canvas = document.createElement('canvas');
+            throw new Error(
+                'Maximum image resolution is 16 megapixels. Resize your image first.'
+            );
+        }
 
-            canvas.width = width;
+        canvas = document.createElement('canvas');
 
-            canvas.height = height;
+        canvas.width = width;
+        canvas.height = height;
 
-            const context = canvas.getContext(
+        const context = canvas.getContext(
+            '2d',
+            { willReadFrequently: true }
+        );
 
-                '2d',
+        if (!context) {
 
-                { willReadFrequently: true }
+            throw new Error(
+                'Canvas is not supported in this browser.'
+            );
+        }
+
+        context.drawImage(bitmap, 0, 0);
+
+        /* QUICK SOLID BACKGROUND REMOVAL */
+
+        if (mode === 'solid') {
+
+            note(
+                'bg-status',
+                'Removing background pixels…'
             );
 
-            if (!context) {
-
-                throw Error('Canvas is unavailable.');
-            }
-
-            context.drawImage(bitmap, 0, 0);
-
-            if (mode === 'solid') {
-
-                note(
-                    'bg-status',
-                    'Removing background pixels…'
-                );
-
-                removeSolidBackground(
-
-                    context,
-
-                    width,
-
-                    height,
-
-                    tolerance
-                );
-
-            } else {
-
-                note(
-
-                    'bg-status',
-
-                    'Loading AI model. First use needs internet…'
-                );
-
-                const {
-
-                    processor,
-
-                    model,
-
-                    RawImage
-
-                } = await loadAIModel();
-
-                note(
-
-                    'bg-status',
-
-                    'Detecting the subject locally…'
-                );
-
-                const raw = await RawImage.read(canvas);
-
-                const inputs = await processor(raw);
-
-                const result = await model({
-
-                    input: inputs.pixel_values
-                });
-
-                if (!result.mask) {
-
-                    throw Error('AI model returned no mask.');
-                }
-
-                const mask = await RawImage
-
-                    .fromTensor(result.mask)
-
-                    .resize(width, height);
-
-                const pixels = context.getImageData(
-
-                    0, 0, width, height
-                );
-
-                for (let i = 0; i < width * height; i++) {
-
-                    pixels.data[i * 4 + 3] = Math.round(
-
-                        pixels.data[i * 4 + 3] *
-
-                        mask.data[i * mask.channels] / 255
-                    );
-                }
-
-                context.putImageData(pixels, 0, 0);
-            }
+            removeSolidBackground(
+                context,
+                width,
+                height,
+                tolerance
+            );
 
             return await toPNG(canvas);
+        }
 
-        } finally {
+        /* AUTOMATIC AI BACKGROUND REMOVAL */
 
-            bitmap.close();
+        note(
+            'bg-status',
+            'Preparing AI model. First use requires internet…'
+        );
 
-            if (canvas) {
+        const segmenter = await loadAIModel();
 
-                canvas.width = 0;
+        note(
+            'bg-status',
+            'Detecting subject and removing background…'
+        );
 
-                canvas.height = 0;
-            }
+        const results = await segmenter([canvas]);
+
+        const result = results[0];
+
+        if (!result || result.channels !== 4) {
+
+            throw new Error(
+                'AI model did not return a transparent image.'
+            );
+        }
+
+        resultCanvas = await result.toCanvas();
+
+        const resultContext = resultCanvas.getContext(
+            '2d',
+            { willReadFrequently: true }
+        );
+
+        if (!resultContext) {
+
+            throw new Error(
+                'Could not create transparent output.'
+            );
+        }
+
+        /* PRESERVE ORIGINAL RESOLUTION */
+
+        canvas.width = width;
+        canvas.height = height;
+
+        context.clearRect(
+            0, 0, width, height
+        );
+
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+
+        context.drawImage(
+            resultCanvas,
+            0,
+            0,
+            width,
+            height
+        );
+
+        note(
+            'bg-status',
+            'Preparing transparent PNG…'
+        );
+
+        return await toPNG(canvas);
+
+    } finally {
+
+        bitmap.close();
+
+        if (canvas) {
+
+            canvas.width = 0;
+            canvas.height = 0;
+        }
+
+        if (resultCanvas) {
+
+            resultCanvas.width = 0;
+            resultCanvas.height = 0;
         }
     }
+}
 
     /* BACKGROUND REMOVE BUTTON */
 
